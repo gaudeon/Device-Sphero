@@ -152,7 +152,7 @@ Exception handling
 
 =head1 AUTHOR
 
-Travis Chase, C<< <gaudeon at cpan dot org> >>
+Travis Chase, C<< gaudeon at cpan dot org >>
 
 =head1 LICENSE
 

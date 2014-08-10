@@ -55,7 +55,7 @@ REQUIREMENTS
     Exception handling
 
 AUTHOR
-    Travis Chase, "<gaudeon at cpan dot org>"
+    Travis Chase, "gaudeon at cpan dot org"
 
 LICENSE
     This program is free software. You can redistribute it and/or modify it
