@@ -6,10 +6,15 @@ use warnings;
 our $VERSION = '0.0.1';
 $VERSION = eval $VERSION;
 
-use IO::Socket;
+use Device::Sphero::Constants;
+use Device::Sphero::Response;
+
 use List::Util qw(first);
 use Net::Bluetooth;
 use Throw;
+
+use Data::Dumper;
+use Data::HexDump;
 
 sub new {
     my $class = shift;
@@ -24,7 +29,7 @@ sub remote_devices { get_remote_devices() }
 
 sub find_addr_by_name {
     my $self = shift;
-    my $name = shift;
+    my $name = shift || throw "Name required";
 
     my $devices = $self->remote_devices();
 
@@ -40,8 +45,14 @@ sub find_addr_by_name {
 sub sdp_records {
     my $self = shift;
 
-    return $self->{'sdp_records'} ||= sdp_search($self->addr,'','');
+    return $self->{'sdp_records'} ||= do {
+        my $hash = sdp_search($self->addr,'1101','');
+        throw "Missing RFCOMM service record" unless exists $hash->{'RFCOMM'};
+        $hash;
+    };
 }
+
+sub rfcomm_port { shift->sdp_records->{'RFCOMM'} };
 
 sub name { shift->{'name'} }
 
@@ -59,7 +70,7 @@ sub addr {
     };
 }
 
-sub _nbt_socket { 
+sub nbt_socket { 
     my $self = shift;
 
     $self->{'__nbt_socket'} ||= Net::Bluetooth->newsocket('RFCOMM');
@@ -69,17 +80,39 @@ sub _nbt_socket {
     return $self->{'__nbt_socket'};
 }
 
-sub io_socket {
+sub nbt_socket_fh {
     my $self = shift;
-
-    return $self->{'__io_socket'} ||= do {
-        throw "Connection error: $!\n" unless $self->_nbt_socket->connect( $self->addr, $self->sdp_records->{'RFCOMM'} ) == 0;
-        
-        IO::Socket->new_from_fd(
-            $self->_nbt_socket->perlfh(),
-            'r+'
-        ) || throw "Failed to create IO::Socket";
+    return $self->{'__nbt_socket_fh'} ||= do {
+        throw "Connection error: $!\n" unless $self->nbt_socket->connect( $self->addr, $self->rfcomm_port ) == 0;
+        $self->nbt_socket->perlfh();
     };
+}
+
+sub send_request {
+    my $self    = shift;
+    my $request = shift;
+
+    ref $request eq 'Device::Sphero::Request' || throw 'Invalid request';
+   
+    my $fh = $self->nbt_socket_fh;
+
+    syswrite $fh, $request->packet;
+
+    my $response;
+
+    if($request->sop2_answer) {
+        my $buffer;
+
+        sysread $fh, $buffer, Device::Sphero::Constants::RESPONSE_HEADER_SIZE;
+
+        $response = Device::Sphero::Response->new($buffer);
+
+        sysread $fh, $buffer, $response->length;
+
+        $response->parse_body($buffer);
+    }
+
+    return $response;
 }
 
 1;
@@ -137,10 +170,6 @@ returns the address. This is required to communicate with the Sphero. There are 
 =head2 L<Net::Bluetooth>
 
 As of this writing, Net::Bluetooth only supports BlueZ (on Linux) or Windows' Bluetooth drivers.
-
-=head2 L<IO::Socket>
-
-So we can use send and recv
 
 =head2 L<List::Util>
 
