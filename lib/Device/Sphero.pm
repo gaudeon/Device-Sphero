@@ -8,6 +8,7 @@ $VERSION = eval $VERSION;
 
 use Device::Sphero::Constants;
 use Device::Sphero::Response;
+use Device::Sphero::Response::Null;
 
 use List::Util qw(first);
 use Net::Bluetooth;
@@ -105,14 +106,36 @@ sub send_request {
 
         sysread $fh, $buffer, Device::Sphero::Constants::RESPONSE_HEADER_SIZE;
 
-        $response = Device::Sphero::Response->new($buffer);
-
+        my $response_class_name = 'Device::Sphero::Response::' . $self->response_class_name($request->command);
+        
+        $response = eval {
+            my $response_class_location = $response_class_name;
+            $response_class_location =~ s|::|/|g;
+            require $response_class_location . '.pm';
+            $response_class_name->new($buffer);
+        } || undef;
+        
+        $response = Device::Sphero::Response->new($buffer) if ! $response;
+        
         sysread $fh, $buffer, $response->length;
 
         $response->parse_body($buffer);
     }
+    else {
+        $response = Device::Sphero::Response::Null->new();
+    }
 
     return $response;
+}
+
+sub response_class_name {
+    my ($self, $request_name) = @_;
+    
+    $request_name = ucfirst(lc($request_name));
+    $request_name =~ s/_(\w)/uc($1)/eg;
+    $request_name =~ s/_//g;
+    
+    return $request_name;
 }
 
 1;

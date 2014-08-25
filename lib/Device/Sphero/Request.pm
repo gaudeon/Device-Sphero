@@ -52,7 +52,15 @@ sub sop2 {
 
 sub data { 
     my $self = shift;
-    my $data = [];
+    my $data = shift;
+
+    # Set data if params where passed
+    if($data) {
+        $self->{'data'} = ref $data eq 'ARRAY' ? $data : [ split '', $data ];
+    }
+    else {
+        $data = [];
+    }
 
     if(defined $self->{'data'}) {
         $data = ref $self->{'data'} eq 'ARRAY' ? $self->{'data'} : [ split '', $self->{'data'} ];

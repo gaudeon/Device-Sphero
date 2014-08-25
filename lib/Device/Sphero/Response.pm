@@ -23,6 +23,36 @@ sub sop2 { shift->{'sop2'} }
 
 sub response_code { shift->{'response_code'} }
 
+sub response_message_hash {
+    
+    return +{
+        0x00 => 'Command succeeded',
+        0x01 => 'General, non-specific error',
+        0x02 => 'Received checksum failure',
+        0x03 => 'Received command fragment',
+        0x04 => 'Unknown command ID',
+        0x05 => 'Command currently unsupported',
+        0x06 => 'Bad message format',
+        0x07 => 'Parameter value(s) invalid',
+        0x08 => 'Failed to execute command',
+        0x09 => 'Unknown Device ID',
+        0x0A => 'Generic RAM access needed but it is busy',
+        0x0B => 'Supplied password incorrect',
+        0x31 => 'Voltage too low for reflash operation',
+        0x32 => 'Illegal page number provided',
+        0x33 => 'Page did not reprogram correctly',
+        0x34 => 'Main Application corrupt',
+        0x35 => 'Msg state machine timed out',
+    };
+}
+
+
+sub response_message {
+    my $self = shift;
+    
+    return $self->response_code ? $self->response_message_hash->{ $self->response_code } : '';
+}
+
 sub sequence { shift->{'sequence'} }
 
 sub length { shift->{'length'} }
@@ -44,7 +74,7 @@ sub checksum {
 
     $self->{'checksum'} = $checksum if defined $checksum;
 
-    return $self->{'checksum'};
+    return $self->{'checksum'} || throw 'No checksum found';
 }
 
 sub validate_checksum {
@@ -56,7 +86,7 @@ sub validate_checksum {
     $sum = $sum % 256;
     $sum = ~$sum & 0xFF;
 
-    return $sum == $self->checksum;
+    return defined $sum && defined $self->checksum && $sum == $self->checksum;
 }
 
 sub header {
