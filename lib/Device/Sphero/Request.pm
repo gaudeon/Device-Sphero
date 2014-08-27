@@ -11,11 +11,40 @@ sub new {
     my $args  = shift || {};
 
     $args = {} unless ref $args eq 'HASH';
+    
+    _validate_args($args);
+    
+    my $request_class_name = do {
+        my $name = $args->{'command'} || '';
+        
+        $name = ucfirst(lc($name));
+        $name =~ s/_(\w)/uc($1)/eg;
+        $name =~ s/_//g;
+        
+        "Device::Sphero::Request::$name";
+    };
+    
+    my $self = eval {
+        my $request_class_location = $request_class_name;
+        $request_class_location =~ s|::|/|g;
+        require $request_class_location . '.pm';
+        bless $args, $request_class_name; 
+    } || undef;
+    
+    $self->_validate_args($args) if $self && $self->can('_validate_args');
 
-    return bless $args, $class;
+    $self = bless $args, $class if ! $self;        
+
+    return $self;
 }
 
-sub command { shift->{'command'} || throw "command required." }
+sub _validate_args {
+    my $args = shift;
+    
+    throw "Command required" unless defined $args->{'command'};
+}
+
+sub command { shift->{'command'} }
 
 sub command_code {
     my $self = shift;
@@ -50,26 +79,11 @@ sub sop2 {
     };
 }
 
-sub data { 
-    my $self = shift;
-    my $data = shift;
+sub data { [ ] } # Subclass Request in order to handle data
 
-    # Set data if params where passed
-    if($data) {
-        $self->{'data'} = ref $data eq 'ARRAY' ? $data : [ split '', $data ];
-    }
-    else {
-        $data = [];
-    }
+sub length {  length( shift->pack_body ) + 1  }; # Add one for checksum
 
-    if(defined $self->{'data'}) {
-        $data = ref $self->{'data'} eq 'ARRAY' ? $self->{'data'} : [ split '', $self->{'data'} ];
-    }
-
-    return $data;
-}
-
-sub length {  scalar( @{ shift->data } ) + 1 };
+sub checksum_pack_format { 'C' }
 
 sub checksum {
     my $self = shift;
@@ -82,11 +96,27 @@ sub checksum {
     return $sum;
 }
 
+sub pack_checksum {
+    my $self = shift;
+    
+    return pack($self->checksum_pack_format, $self->checksum);
+}
+
+sub header_pack_format { 'C6' }
+
 sub header {
     my $self = shift;
 
     return ( $self->sop1, $self->sop2, @{ $self->command_code }, $self->sequence, $self->length );
 }
+
+sub pack_header {
+    my $self = shift;
+    
+    return pack($self->header_pack_format, $self->header);
+}
+
+sub body_pack_format { 'C*' }
 
 sub body {
     my $self = shift;
@@ -94,10 +124,18 @@ sub body {
     return ( @{ $self->data } );
 }
 
+sub pack_body {
+    my $self = shift;
+    
+    return pack($self->body_pack_format, $self->body);
+}
+
 sub packet {
     my $self = shift;
 
-    return pack('C*', $self->header, $self->body, $self->checksum);
+    return $self->pack_header
+           . $self->pack_body
+           . $self->pack_checksum;
 }
 
 1;

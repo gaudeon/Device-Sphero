@@ -74,7 +74,7 @@ sub checksum {
 
     $self->{'checksum'} = $checksum if defined $checksum;
 
-    return $self->{'checksum'} || throw 'No checksum found';
+    return defined $self->{'checksum'} ? $self->{'checksum'} : -1;
 }
 
 sub validate_checksum {

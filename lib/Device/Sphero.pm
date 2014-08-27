@@ -93,7 +93,7 @@ sub send_request {
     my $self    = shift;
     my $request = shift;
 
-    ref $request eq 'Device::Sphero::Request' || throw 'Invalid request';
+     throw 'Invalid request' unless ref($request) =~ m/^Device::Sphero::Request/;
    
     my $fh = $self->nbt_socket_fh;
 
